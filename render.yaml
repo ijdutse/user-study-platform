@@ -1,11 +1,9 @@
-services:
-  # PostgreSQL Database
-  - type: pserv
-    name: assessing-bars-db
-    env: docker
+databases:
+  - name: assessing-bars-db
+    databaseName: assessing_bars
     plan: free
-    
-  # Web Service (Backend + Frontend)
+
+services:
   - type: web
     name: assessing-bars-app
     env: node
