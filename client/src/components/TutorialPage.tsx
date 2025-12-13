@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AttentionCheck from './AttentionCheck';
+import { API_BASE_URL } from '../config';
 
 interface TutorialPageProps {
     onComplete: (score: number) => void;
@@ -30,7 +31,7 @@ const TutorialPage: React.FC<TutorialPageProps> = ({ onComplete }) => {
                                 className="w-full h-full object-contain"
                                 onEnded={handleVideoComplete}
                             >
-                                <source src="http://localhost:3001/sample1.mp4" type="video/mp4" />
+                                <source src={`${API_BASE_URL}/sample1.mp4`} type="video/mp4" />
                                 Your browser does not support the video tag.
                             </video>
                         </div>

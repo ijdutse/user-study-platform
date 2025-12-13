@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { API_URL } from '../config';
 
 interface ParticipantData {
     id: string;
@@ -61,7 +62,7 @@ const AdminDashboard = () => {
         setError('');
 
         try {
-            const response = await fetch('http://localhost:3001/api/login', {
+            const response = await fetch(`${API_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ password }),
@@ -95,8 +96,8 @@ const AdminDashboard = () => {
             const headers = { 'Authorization': `Bearer ${token}` };
 
             const [ratingsRes, participantsRes] = await Promise.all([
-                fetch('http://localhost:3001/api/ratings', { headers }),
-                fetch('http://localhost:3001/api/participants', { headers })
+                fetch(`${API_URL}/ratings`, { headers }),
+                fetch(`${API_URL}/participants`, { headers })
             ]);
 
             if (ratingsRes.status === 401 || ratingsRes.status === 403 ||

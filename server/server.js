@@ -4,7 +4,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
-const db = require('./database');
+const { query: dbQuery, initDatabase } = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -13,7 +13,12 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public'))); // Serve uploaded/sample videos
+
+// Serve video files from public directory
+app.use('/videos', express.static(path.join(__dirname, 'public')));
+
+// Serve built frontend (for production)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Middleware to authenticate JWT
 const authenticateToken = (req, res, next) => {
@@ -47,7 +52,7 @@ app.post('/api/login', async (req, res) => {
 // Get all videos
 app.get('/api/videos', async (req, res) => {
     try {
-        const result = await db.query("SELECT * FROM videos");
+        const result = await dbQuery("SELECT * FROM videos");
         res.json({
             "message": "success",
             "data": result.rows
@@ -64,7 +69,7 @@ app.post('/api/participants', async (req, res) => {
     const params = [id, age, gender, ethnicity, education, language_fluency, media_familiarity, consent ? 1 : 0, contact_email];
 
     try {
-        await db.query(sql, params);
+        await dbQuery(sql, params);
         res.json({ "message": "success", "data": id });
     } catch (err) {
         res.status(400).json({ "error": err.message });
@@ -74,7 +79,7 @@ app.post('/api/participants', async (req, res) => {
 // Get all participants (Demographics) - PROTECTED
 app.get('/api/participants', authenticateToken, async (req, res) => {
     try {
-        const result = await db.query("SELECT * FROM participants ORDER BY timestamp DESC");
+        const result = await dbQuery("SELECT * FROM participants ORDER BY timestamp DESC");
         res.json({
             "message": "success",
             "data": result.rows
@@ -115,7 +120,7 @@ app.put('/api/participants/:id', async (req, res) => {
     params.push(req.params.id);
 
     try {
-        const result = await db.query(sql, params);
+        const result = await dbQuery(sql, params);
         res.json({ "message": "success", "changes": result.rowCount });
     } catch (err) {
         console.error("Database error updating participant:", err.message);
@@ -132,7 +137,7 @@ app.post('/api/ratings', async (req, res) => {
     const params = [video_id, participant_id, accuracy, bias, representativeness, stereotypes, comments];
 
     try {
-        const result = await db.query(sql, params);
+        const result = await dbQuery(sql, params);
         res.json({
             "message": "success",
             "data": result.rows[0].id
@@ -151,7 +156,7 @@ app.get('/api/ratings', authenticateToken, async (req, res) => {
         ORDER BY r.timestamp DESC
     `;
     try {
-        const result = await db.query(sql);
+        const result = await dbQuery(sql);
         res.json({
             "message": "success",
             "data": result.rows

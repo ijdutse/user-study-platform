@@ -103,7 +103,8 @@ async function initDatabase() {
     }
 }
 
-// Initialize on require (or call explicitly in server.js)
-initDatabase();
-
-module.exports = pool;
+// Export both the pool and initDatabase function
+module.exports = {
+    query: (text, params) => pool.query(text, params),
+    initDatabase
+};

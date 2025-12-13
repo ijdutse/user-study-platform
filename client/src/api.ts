@@ -1,6 +1,5 @@
 import type { Video, Rating } from './types';
-
-const API_URL = 'http://localhost:3001/api';
+import { API_URL } from './config';
 
 export const fetchVideos = async (): Promise<Video[]> => {
     const response = await fetch(`${API_URL}/videos`);

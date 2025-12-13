@@ -10,6 +10,7 @@ import DebriefPage from './components/DebriefPage';
 import ThankYouPage from './components/ThankYouPage';
 import { fetchVideos, submitRating, submitDemographics, submitAttentionCheck, submitDebrief } from './api';
 import type { Video, Rating } from './types';
+import { API_BASE_URL } from './config';
 
 function AssessmentApp() {
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
@@ -207,7 +208,7 @@ function AssessmentApp() {
                   <div className="aspect-w-16 aspect-h-9 bg-black">
                     {videos.length > 0 && (
                       <VideoPlayer
-                        src={`http://localhost:3001/${videos[currentIndex].filename}`}
+                        src={`${API_BASE_URL}/${videos[currentIndex].filename}`}
                         onError={() => console.log('Video load error')}
                       />
                     )}
