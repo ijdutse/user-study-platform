@@ -4,7 +4,6 @@ services:
     name: assessing-bars-db
     env: docker
     plan: free
-    ipAllowList: []
     
   # Web Service (Backend + Frontend)
   - type: web
