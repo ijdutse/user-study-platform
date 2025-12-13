@@ -11,10 +11,11 @@ services:
     plan: free
     branch: main
     buildCommand: |
-      cd server && npm ci
+      cd server && npm ci --only=production
       cd ../client && npm ci && npm run build
-      mkdir -p ../server/public/dist
-      cp -r dist/* ../server/public/
+      cd ..
+      mkdir -p server/public
+      cp -r client/dist/* server/public/
     startCommand: cd server && npm start
     envVars:
       - key: NODE_ENV
