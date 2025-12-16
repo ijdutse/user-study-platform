@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 
 interface DemographicsFormProps {
     onSubmit: (data: any) => void;
+    isSubmitting?: boolean;
 }
 
-const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
+const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit, isSubmitting = false }) => {
     const [formData, setFormData] = useState({
         age: '',
         gender: '',
@@ -21,6 +22,8 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+
         if (Object.values(formData).some(val => val === '')) {
             alert('Please fill in all fields');
             return;
@@ -47,6 +50,7 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
                         placeholder="Enter your age"
                         min="18"
                         max="100"
+                        disabled={isSubmitting}
                     />
                 </div>
 
@@ -57,6 +61,7 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
                         value={formData.gender}
                         onChange={handleChange}
                         className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                        disabled={isSubmitting}
                     >
                         <option value="">Select Gender</option>
                         <option value="Male">Male</option>
@@ -74,6 +79,7 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
                         value={formData.ethnicity}
                         onChange={handleChange}
                         className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                        disabled={isSubmitting}
                     >
                         <option value="">Select Ethnicity</option>
                         <option value="Asian">Asian</option>
@@ -94,6 +100,7 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
                         value={formData.education}
                         onChange={handleChange}
                         className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                        disabled={isSubmitting}
                     >
                         <option value="">Select Education</option>
                         <option value="High School">High School</option>
@@ -112,6 +119,7 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
                         value={formData.language_fluency}
                         onChange={handleChange}
                         className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                        disabled={isSubmitting}
                     >
                         <option value="">Select Fluency</option>
                         <option value="Native">Native Speaker</option>
@@ -128,6 +136,7 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
                         value={formData.media_familiarity}
                         onChange={handleChange}
                         className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
+                        disabled={isSubmitting}
                     >
                         <option value="">Select Familiarity</option>
                         <option value="Very Familiar">Very Familiar (I use/see it often)</option>
@@ -138,9 +147,21 @@ const DemographicsForm: React.FC<DemographicsFormProps> = ({ onSubmit }) => {
 
                 <button
                     type="submit"
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors mt-6"
+                    disabled={isSubmitting}
+                    className={`w-full font-bold py-3 px-4 rounded-lg shadow transition-colors mt-6 ${isSubmitting
+                            ? 'bg-indigo-400 cursor-not-allowed text-white'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                        }`}
                 >
-                    Start Assessment
+                    {isSubmitting ? (
+                        <span className="flex items-center justify-center">
+                            <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Starting...
+                        </span>
+                    ) : 'Start Assessment'}
                 </button>
             </form>
         </div>

@@ -14,6 +14,35 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 app.use(cors());
 app.use(express.json());
 
+// Rate Limiting
+const rateLimit = require('express-rate-limit');
+
+// Trust proxy is required for rate limiting to work correctly behind Render's load balancer
+app.set('trust proxy', 1);
+
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many requests, please try again later.' }
+});
+
+const submissionLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 20, // Limit each IP to 20 submissions per hour
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Too many submissions, please try again later.' }
+});
+
+// Apply general limiter to all API routes
+app.use('/api', generalLimiter);
+
+// Apply stricter limiter to submission endpoints
+app.use('/api/participants', submissionLimiter);
+app.use('/api/ratings', submissionLimiter);
+
 // Serve video files from public directory
 app.use('/videos', express.static(path.join(__dirname, 'public')));
 

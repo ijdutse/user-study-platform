@@ -13,12 +13,24 @@ import type { Video, Rating } from './types';
 import { API_BASE_URL } from './config';
 
 function AssessmentApp() {
-  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
+  const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(() => {
+    const saved = localStorage.getItem('assessment_step');
+    return saved ? parseInt(saved) as any : 1;
+  });
   const [videos, setVideos] = useState<Video[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const saved = localStorage.getItem('assessment_currentIndex');
+    return saved ? parseInt(saved) : 0;
+  });
   const [loading, setLoading] = useState(true);
-  const [participantId] = useState(() => 'user_' + Math.random().toString(36).substr(2, 9));
-  const [darkMode, setDarkMode] = useState(false);
+  const [participantId] = useState(() => {
+    const saved = localStorage.getItem('assessment_participantId');
+    return saved || 'user_' + Math.random().toString(36).substr(2, 9);
+  });
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('assessment_darkMode') === 'true';
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     loadVideos();
@@ -28,12 +40,35 @@ function AssessmentApp() {
   }, []);
 
   useEffect(() => {
+    localStorage.setItem('assessment_step', step.toString());
+  }, [step]);
+
+  useEffect(() => {
+    localStorage.setItem('assessment_currentIndex', currentIndex.toString());
+  }, [currentIndex]);
+
+  useEffect(() => {
+    localStorage.setItem('assessment_participantId', participantId);
+  }, [participantId]);
+
+  useEffect(() => {
+    localStorage.setItem('assessment_darkMode', darkMode.toString());
     if (darkMode) {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
   }, [darkMode]);
+
+  // Clear progress on completion
+  useEffect(() => {
+    if (step === 6) {
+      localStorage.removeItem('assessment_step');
+      localStorage.removeItem('assessment_currentIndex');
+      localStorage.removeItem('assessment_participantId');
+      // We keep darkMode preference
+    }
+  }, [step]);
 
   const loadVideos = async () => {
     try {
@@ -59,6 +94,7 @@ function AssessmentApp() {
 
   // Step 2: Demographics
   const handleDemographicsSubmit = async (data: any) => {
+    setIsSubmitting(true);
     try {
       const email = sessionStorage.getItem('participantEmail') || '';
       await submitDemographics({
@@ -71,6 +107,8 @@ function AssessmentApp() {
     } catch (error) {
       console.error('Error submitting demographics:', error);
       alert('Failed to save information. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -87,6 +125,7 @@ function AssessmentApp() {
 
   // Step 4: Main Task (Video Ratings)
   const handleRatingSubmit = async (ratingData: Omit<Rating, 'participant_id'>) => {
+    setIsSubmitting(true);
     try {
       await submitRating({
         ...ratingData,
@@ -102,6 +141,8 @@ function AssessmentApp() {
     } catch (error) {
       console.error('Error submitting rating:', error);
       alert('Failed to submit rating. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -151,7 +192,7 @@ function AssessmentApp() {
 
       {step === 2 && (
         <div className="py-8 px-4">
-          <DemographicsForm onSubmit={handleDemographicsSubmit} />
+          <DemographicsForm onSubmit={handleDemographicsSubmit} isSubmitting={isSubmitting} />
         </div>
       )}
 
@@ -230,6 +271,7 @@ function AssessmentApp() {
                   key={videos[currentIndex]?.id}
                   videoId={videos[currentIndex]?.id}
                   onSubmit={handleRatingSubmit}
+                  isSubmitting={isSubmitting}
                 />
               </div>
             </div>
