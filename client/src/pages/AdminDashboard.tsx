@@ -1,361 +1,365 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { API_URL } from '../config';
+import { useState, useEffect } from 'react';
+import { loginAdmin, fetchVideos, uploadVideo, updateVideo, fetchAdminStats } from '../api';
+import type { Video } from '../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-interface ParticipantData {
-    id: string;
-    age: number;
-    gender: string;
-    ethnicity: string;
-    education: string;
-    language_fluency?: string;
-    media_familiarity?: string;
-    consent?: number;
-    contact_email?: string;
-    qualitative_feedback?: string;
-    compensation_id?: string;
-    attention_check?: number;
-    timestamp: string;
+interface AdminStats {
+    ageDistribution: { age_group: string; count: string }[];
+    videoRatings: {
+        title: string;
+        avg_accuracy: string;
+        avg_bias: string;
+        avg_representativeness: string;
+        avg_stereotypes: string;
+        rating_count: string;
+    }[];
 }
 
-interface RatingData {
-    id: number;
-    video_id: number;
-    video_title: string;
-    filename: string;
-    participant_id: string;
-    accuracy: number;
-    bias: number;
-    representativeness: number;
-    stereotypes: number;
-    comments: string;
-    timestamp: string;
-}
-
-const AdminDashboard = () => {
-    const [ratings, setRatings] = useState<RatingData[]>([]);
-    const [participants, setParticipants] = useState<ParticipantData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'demographics' | 'ratings'>('demographics');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+export default function AdminDashboard() {
+    const [token, setToken] = useState(localStorage.getItem('admin_token'));
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
+    const [activeTab, setActiveTab] = useState<'videos' | 'analytics'>('videos');
+
+    // Data State
+    const [videos, setVideos] = useState<Video[]>([]);
+    const [stats, setStats] = useState<AdminStats | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    // Upload State
+    const [uploadFile, setUploadFile] = useState<File | null>(null);
+    const [uploadTitle, setUploadTitle] = useState('');
+    const [uploadContext, setUploadContext] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Edit State
+    const [editingVideo, setEditingVideo] = useState<Video | null>(null);
 
     useEffect(() => {
-        const token = localStorage.getItem('adminToken');
         if (token) {
-            setIsAuthenticated(true);
-        } else {
-            setLoading(false);
+            loadData();
         }
-    }, []);
+    }, [token]);
 
-    useEffect(() => {
-        if (isAuthenticated) {
-            fetchData();
-        }
-    }, [isAuthenticated]);
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const loadData = async () => {
         setLoading(true);
-        setError('');
-
         try {
-            const response = await fetch(`${API_URL}/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password }),
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                localStorage.setItem('adminToken', data.accessToken);
-                setIsAuthenticated(true);
-            } else {
-                setError('Invalid password');
-                setLoading(false);
-            }
-        } catch (err) {
-            console.error('Login error:', err);
-            setError('Login failed. Please try again.');
-            setLoading(false);
-        }
-    };
-
-    const handleLogout = () => {
-        localStorage.removeItem('adminToken');
-        setIsAuthenticated(false);
-        setRatings([]);
-        setParticipants([]);
-    };
-
-    const fetchData = async () => {
-        try {
-            const token = localStorage.getItem('adminToken');
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            const [ratingsRes, participantsRes] = await Promise.all([
-                fetch(`${API_URL}/ratings`, { headers }),
-                fetch(`${API_URL}/participants`, { headers })
+            const [videosData, statsData] = await Promise.all([
+                fetchVideos(),
+                fetchAdminStats(token!)
             ]);
-
-            if (ratingsRes.status === 401 || ratingsRes.status === 403 ||
-                participantsRes.status === 401 || participantsRes.status === 403) {
-                handleLogout();
-                return;
+            setVideos(videosData);
+            setStats(statsData);
+        } catch (err) {
+            console.error("Failed to load data", err);
+            if (err instanceof Error && err.message.includes('403')) {
+                logout();
             }
-
-            const ratingsData = await ratingsRes.json();
-            const participantsData = await participantsRes.json();
-
-            setRatings(ratingsData.data);
-            setParticipants(participantsData.data);
-        } catch (error) {
-            console.error('Error fetching data:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    const downloadCSV = (type: 'demographics' | 'ratings') => {
-        const escapeCsv = (str: string | number | undefined) => {
-            if (str === undefined || str === null) return '';
-            const stringValue = String(str);
-            if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-                return `"${stringValue.replace(/"/g, '""')}"`;
-            }
-            return stringValue;
-        };
-
-        let headers: string[] = [];
-        let rows: string[] = [];
-        let filename = '';
-
-        if (type === 'demographics') {
-            headers = ['Participant ID', 'Age', 'Gender', 'Ethnicity', 'Education', 'Fluency', 'Familiarity', 'Consent', 'Email', 'Attention Check', 'Feedback', 'Compensation ID', 'Timestamp'];
-            rows = participants.map(p => [
-                escapeCsv(p.id),
-                escapeCsv(p.age),
-                escapeCsv(p.gender),
-                escapeCsv(p.ethnicity),
-                escapeCsv(p.education),
-                escapeCsv(p.language_fluency),
-                escapeCsv(p.media_familiarity),
-                p.consent ? 'Yes' : 'No',
-                escapeCsv(p.contact_email),
-                escapeCsv(p.attention_check),
-                escapeCsv(p.qualitative_feedback),
-                escapeCsv(p.compensation_id),
-                p.timestamp
-            ].join(','));
-            filename = `demographics_${new Date().toISOString().split('T')[0]}.csv`;
-        } else {
-            headers = ['ID', 'Video Title', 'Filename', 'Participant ID', 'Accuracy', 'Bias', 'Representativeness', 'Stereotypes', 'Comments', 'Timestamp'];
-            rows = ratings.map(r => [
-                r.id,
-                escapeCsv(r.video_title),
-                escapeCsv(r.filename),
-                escapeCsv(r.participant_id),
-                r.accuracy,
-                r.bias,
-                r.representativeness,
-                r.stereotypes,
-                escapeCsv(r.comments),
-                r.timestamp
-            ].join(','));
-            filename = `ratings_${new Date().toISOString().split('T')[0]}.csv`;
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            const data = await loginAdmin(password);
+            localStorage.setItem('admin_token', data.accessToken);
+            setToken(data.accessToken);
+            setError('');
+        } catch (err) {
+            setError('Invalid password');
         }
-
-        const csvContent = [headers.join(','), ...rows].join('\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
     };
 
-    if (!isAuthenticated) {
+    const logout = () => {
+        localStorage.removeItem('admin_token');
+        setToken(null);
+    };
+
+    const handleUpload = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!uploadFile || !token) return;
+
+        setIsUploading(true);
+        try {
+            await uploadVideo(uploadFile, uploadTitle, uploadContext, token);
+            setUploadFile(null);
+            setUploadTitle('');
+            setUploadContext('');
+            alert('Video uploaded successfully!');
+            loadData();
+        } catch (err) {
+            alert('Failed to upload video');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingVideo || !token) return;
+
+        try {
+            await updateVideo(editingVideo.id, editingVideo.title, editingVideo.context, token);
+            setEditingVideo(null);
+            loadData();
+        } catch (err) {
+            alert('Failed to update video');
+        }
+    };
+
+    if (!token) {
         return (
-            <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-                <div className="max-w-md w-full bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
-                    <h1 className="text-2xl font-bold mb-6 text-center text-gray-900 dark:text-white">Admin Login</h1>
+            <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+                <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-96">
+                    <h1 className="text-2xl font-bold mb-6 text-gray-900 dark:text-white">Admin Login</h1>
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Password</label>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password</label>
                             <input
                                 type="password"
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
-                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500"
-                                placeholder="Enter admin password"
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
                             />
                         </div>
                         {error && <p className="text-red-500 text-sm">{error}</p>}
                         <button
                             type="submit"
-                            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg shadow transition-colors"
-                            disabled={loading}
+                            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
-                            {loading ? 'Logging in...' : 'Login'}
+                            Login
                         </button>
-                        <div className="text-center mt-4">
-                            <Link to="/" className="text-sm text-gray-500 hover:text-indigo-600 dark:text-gray-400 dark:hover:text-indigo-400">
-                                Back to Assessment
-                            </Link>
-                        </div>
                     </form>
                 </div>
             </div>
         );
     }
 
-    if (loading) {
-        return <div className="p-8 text-center dark:text-white">Loading...</div>;
-    }
-
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white p-8">
-            <div className="max-w-7xl mx-auto">
-                <div className="flex justify-between items-center mb-8">
-                    <h1 className="text-3xl font-bold">Assessment Results</h1>
-                    <div className="space-x-4">
-                        <button
-                            onClick={handleLogout}
-                            className="text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
-                        >
-                            Logout
-                        </button>
-                        <Link to="/" className="text-indigo-600 dark:text-indigo-400 hover:underline">
-                            Back to Assessment
-                        </Link>
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            <nav className="bg-white dark:bg-gray-800 shadow-sm">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="flex justify-between h-16">
+                        <div className="flex items-center">
+                            <h1 className="text-xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
+                            <div className="ml-10 flex items-baseline space-x-4">
+                                <button
+                                    onClick={() => setActiveTab('videos')}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === 'videos'
+                                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200'
+                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
+                                        }`}
+                                >
+                                    Videos
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('analytics')}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === 'analytics'
+                                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200'
+                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
+                                        }`}
+                                >
+                                    Analytics
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex items-center">
+                            <button
+                                onClick={logout}
+                                className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+                            >
+                                Logout
+                            </button>
+                        </div>
                     </div>
                 </div>
+            </nav>
 
-                {/* Tabs */}
-                <div className="flex space-x-4 mb-6 border-b border-gray-200 dark:border-gray-700">
-                    <button
-                        className={`py-2 px-4 font-medium ${activeTab === 'demographics' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        onClick={() => setActiveTab('demographics')}
-                    >
-                        Demographics & Attention
-                    </button>
-                    <button
-                        className={`py-2 px-4 font-medium ${activeTab === 'ratings' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
-                        onClick={() => setActiveTab('ratings')}
-                    >
-                        Video Ratings
-                    </button>
-                </div>
+            <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+                {loading ? (
+                    <div className="flex justify-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+                    </div>
+                ) : activeTab === 'videos' ? (
+                    <div className="space-y-6">
+                        {/* Upload Section */}
+                        <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                            <h2 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Upload New Video</h2>
+                            <form onSubmit={handleUpload} className="space-y-4">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            value={uploadTitle}
+                                            onChange={(e) => setUploadTitle(e.target.value)}
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Video File</label>
+                                        <input
+                                            type="file"
+                                            accept="video/mp4,video/webm"
+                                            required
+                                            onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
+                                            className="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Context / Description</label>
+                                    <textarea
+                                        required
+                                        rows={3}
+                                        value={uploadContext}
+                                        onChange={(e) => setUploadContext(e.target.value)}
+                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
+                                    />
+                                </div>
+                                <div className="flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={isUploading}
+                                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                                    >
+                                        {isUploading ? 'Uploading...' : 'Upload Video'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
 
-                <div className="flex justify-end mb-4">
-                    <button
-                        onClick={() => downloadCSV(activeTab)}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow transition-colors"
-                    >
-                        Export {activeTab === 'demographics' ? 'Demographics' : 'Ratings'} CSV
-                    </button>
-                </div>
+                        {/* Video List */}
+                        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                            <div className="px-4 py-5 sm:px-6">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">Existing Videos</h3>
+                            </div>
+                            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                                {videos.map((video) => (
+                                    <li key={video.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-gray-750">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="text-sm font-medium text-indigo-600 dark:text-indigo-400 truncate">{video.title}</h4>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{video.filename}</p>
+                                                <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{video.context}</p>
+                                            </div>
+                                            <div className="ml-4 flex-shrink-0">
+                                                <button
+                                                    onClick={() => setEditingVideo(video)}
+                                                    className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                                >
+                                                    Edit
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {/* Analytics Section */}
+                        {stats && (
+                            <>
+                                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-6">Participant Demographics (Age)</h3>
+                                    <div className="h-80">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={stats.ageDistribution}>
+                                                <CartesianGrid strokeDasharray="3 3" />
+                                                <XAxis dataKey="age_group" />
+                                                <YAxis />
+                                                <Tooltip />
+                                                <Legend />
+                                                <Bar dataKey="count" fill="#4F46E5" name="Participants" />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
 
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden border border-gray-100 dark:border-gray-700">
-                    <div className="overflow-x-auto">
-                        {activeTab === 'demographics' ? (
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase font-semibold">
-                                    <tr>
-                                        <th className="p-4">ID</th>
-                                        <th className="p-4">Demo</th>
-                                        <th className="p-4">Background</th>
-                                        <th className="p-4 text-center">Consent</th>
-                                        <th className="p-4 text-center">Attn</th>
-                                        <th className="p-4">Feedback & Comp</th>
-                                        <th className="p-4">Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {participants.map((p) => (
-                                        <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                                            <td className="p-4 font-mono text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                                                {p.id}
-                                                {p.contact_email && <div className="text-gray-400 text-[10px]">{p.contact_email}</div>}
-                                            </td>
-                                            <td className="p-4 text-xs">
-                                                <div>{p.age} / {p.gender}</div>
-                                                <div className="text-gray-500">{p.ethnicity}</div>
-                                                <div className="text-gray-500">{p.education}</div>
-                                            </td>
-                                            <td className="p-4 text-xs">
-                                                <div>Fluency: {p.language_fluency || '-'}</div>
-                                                <div>Fam: {p.media_familiarity || '-'}</div>
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                {p.consent ? <span className="text-green-500">✓</span> : <span className="text-red-500">✗</span>}
-                                            </td>
-                                            <td className={`p-4 text-center font-bold ${p.attention_check === 10 ? 'text-green-500' : 'text-red-500'}`}>
-                                                {p.attention_check !== undefined ? p.attention_check : '-'}
-                                            </td>
-                                            <td className="p-4 text-xs max-w-xs">
-                                                {p.qualitative_feedback && <div className="mb-1 italic">"{p.qualitative_feedback}"</div>}
-                                                {p.compensation_id && <div className="font-mono bg-gray-100 dark:bg-gray-700 px-1 rounded inline-block">{p.compensation_id}</div>}
-                                            </td>
-                                            <td className="p-4 text-gray-500 dark:text-gray-400 text-xs">
-                                                {new Date(p.timestamp).toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {participants.length === 0 && (
-                                        <tr>
-                                            <td colSpan={7} className="p-8 text-center text-gray-500">No participants yet.</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        ) : (
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase font-semibold">
-                                    <tr>
-                                        <th className="p-4">Video</th>
-                                        <th className="p-4">Participant ID</th>
-                                        <th className="p-4 text-center">Acc</th>
-                                        <th className="p-4 text-center">Bias</th>
-                                        <th className="p-4 text-center">Rep</th>
-                                        <th className="p-4 text-center">Stereo</th>
-                                        <th className="p-4">Comments</th>
-                                        <th className="p-4">Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
-                                    {ratings.map((rating) => (
-                                        <tr key={rating.id} className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors">
-                                            <td className="p-4 font-medium">{rating.video_title}</td>
-                                            <td className="p-4 text-gray-500 dark:text-gray-400 font-mono text-xs">{rating.participant_id}</td>
-                                            <td className="p-4 text-center">{rating.accuracy}</td>
-                                            <td className="p-4 text-center">{rating.bias}</td>
-                                            <td className="p-4 text-center">{rating.representativeness}</td>
-                                            <td className="p-4 text-center">{rating.stereotypes}</td>
-                                            <td className="p-4 max-w-xs truncate" title={rating.comments}>{rating.comments}</td>
-                                            <td className="p-4 text-gray-500 dark:text-gray-400 text-xs">
-                                                {new Date(rating.timestamp).toLocaleString()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {ratings.length === 0 && (
-                                        <tr>
-                                            <td colSpan={8} className="p-8 text-center text-gray-500">No ratings submitted yet.</td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+                                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-6">Average Ratings per Video</h3>
+                                    <div className="h-96">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={stats.videoRatings} layout="vertical" margin={{ left: 50 }}>
+                                                <CartesianGrid strokeDasharray="3 3" />
+                                                <XAxis type="number" domain={[0, 100]} />
+                                                <YAxis dataKey="title" type="category" width={150} />
+                                                <Tooltip />
+                                                <Legend />
+                                                <Bar dataKey="avg_accuracy" fill="#10B981" name="Accuracy" />
+                                                <Bar dataKey="avg_bias" fill="#EF4444" name="Bias" />
+                                                <Bar dataKey="avg_representativeness" fill="#F59E0B" name="Representativeness" />
+                                                <Bar dataKey="avg_stereotypes" fill="#6366F1" name="Stereotypes" />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </>
                         )}
                     </div>
+                )}
+            </main>
+
+            {/* Edit Modal */}
+            {editingVideo && (
+                <div className="fixed z-10 inset-0 overflow-y-auto">
+                    <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+                        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+                            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+                        </div>
+                        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                        <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                            <form onSubmit={handleUpdate}>
+                                <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">Edit Video</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Title</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={editingVideo.title}
+                                                onChange={(e) => setEditingVideo({ ...editingVideo, title: e.target.value })}
+                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Context</label>
+                                            <textarea
+                                                required
+                                                rows={3}
+                                                value={editingVideo.context}
+                                                onChange={(e) => setEditingVideo({ ...editingVideo, context: e.target.value })}
+                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                                    <button
+                                        type="submit"
+                                        className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:ml-3 sm:w-auto sm:text-sm"
+                                    >
+                                        Save
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingVideo(null)}
+                                        className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
-};
-
-export default AdminDashboard;
+}

@@ -43,6 +43,19 @@ app.use('/api', generalLimiter);
 app.use('/api/participants', submissionLimiter);
 app.use('/api/ratings', submissionLimiter);
 
+// Configure Multer for video uploads
+const multer = require('multer');
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, path.join(__dirname, 'public'));
+    },
+    filename: (req, file, cb) => {
+        // Use original filename but sanitize it slightly if needed
+        cb(null, file.originalname);
+    }
+});
+const upload = multer({ storage: storage });
+
 // Serve video files from public directory
 app.use('/videos', express.static(path.join(__dirname, 'public')));
 
@@ -102,122 +115,166 @@ app.get('/api/videos', async (req, res) => {
     }
 });
 
-// Register participant (Demographics & Consent)
+// Upload new video (Admin) - PROTECTED
+app.post('/api/videos', authenticateToken, upload.single('video'), async (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'No video file uploaded' });
+    }
+
+    const { title, context } = req.body;
+    const filename = req.file.filename;
+
+    const sql = `INSERT INTO videos (filename, title, context) VALUES ($1, $2, $3) RETURNING id`;
+    const params = [filename, title, context];
+
+    try {
+        const result = await dbQuery(sql, params);
+        res.json({
+            "message": "success",
+            "data": {
+                id: result.rows[0].id,
+                filename,
+                title,
+                context
+            }
+        });
+    } catch (err) {
+        res.status(400).json({ "error": err.message });
+    }
+});
+
+// Update video metadata (Admin) - PROTECTED
+app.put('/api/videos/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { title, context } = req.body;
+
+    const sql = `UPDATE videos SET title = $1, context = $2 WHERE id = $3 RETURNING *`;
+    const params = [title, context, id];
+
+    try {
+        const result = await dbQuery(sql, params);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "Video not found" });
+        }
+        res.json({
+            "message": "success",
+            "data": result.rows[0]
+        });
+    } catch (err) {
+        res.status(400).json({ "error": err.message });
+    }
+});
+
+// Get Admin Stats - PROTECTED
+app.get('/api/admin/stats', authenticateToken, async (req, res) => {
+    try {
+        // 1. Age Distribution
+        const ageSql = `
+            SELECT 
+                CASE 
+                    WHEN age < 18 THEN 'Under 18'
+                    WHEN age BETWEEN 18 AND 24 THEN '18-24'
+                    WHEN age BETWEEN 25 AND 34 THEN '25-34'
+                    WHEN age BETWEEN 35 AND 44 THEN '35-44'
+                    WHEN age BETWEEN 45 AND 54 THEN '45-54'
+                    WHEN age BETWEEN 55 AND 64 THEN '55-64'
+                    ELSE '65+'
+                END as age_group,
+                COUNT(*) as count
+            FROM participants
+            WHERE age IS NOT NULL
+            GROUP BY age_group
+            ORDER BY age_group
+        `;
+        const ageResult = await dbQuery(ageSql);
+
+        // 2. Average Ratings per Video
+        const ratingsSql = `
+            SELECT 
+                v.title,
+                AVG(r.accuracy) as avg_accuracy,
+                AVG(r.bias) as avg_bias,
+                AVG(r.representativeness) as avg_representativeness,
+                AVG(r.stereotypes) as avg_stereotypes,
+                COUNT(r.id) as rating_count
+            FROM ratings r
+            JOIN videos v ON r.video_id = v.id
+            GROUP BY v.id, v.title
+            ORDER BY v.title
+        `;
+        const ratingsResult = await dbQuery(ratingsSql);
+
+        res.json({
+            ageDistribution: ageResult.rows,
+            videoRatings: ratingsResult.rows
+        });
+    } catch (err) {
+        console.error("Error fetching stats:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Participants submission
 app.post('/api/participants', async (req, res) => {
     const { id, age, gender, ethnicity, education, language_fluency, media_familiarity, consent, contact_email } = req.body;
-    const sql = `INSERT INTO participants (id, age, gender, ethnicity, education, language_fluency, media_familiarity, consent, contact_email) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
+
+    const sql = `INSERT INTO participants (id, age, gender, ethnicity, education, language_fluency, media_familiarity, consent, contact_email) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`;
     const params = [id, age, gender, ethnicity, education, language_fluency, media_familiarity, consent ? 1 : 0, contact_email];
 
     try {
         await dbQuery(sql, params);
-        res.json({ "message": "success", "data": id });
+        res.json({ "message": "success", "id": id });
     } catch (err) {
         res.status(400).json({ "error": err.message });
     }
 });
 
-// Get all participants (Demographics) - PROTECTED
-app.get('/api/participants', authenticateToken, async (req, res) => {
+// Attention Check submission
+app.post('/api/attention-check', async (req, res) => {
+    const { participant_id, score } = req.body;
+    const sql = `UPDATE participants SET attention_check = $1 WHERE id = $2`;
     try {
-        const result = await dbQuery("SELECT * FROM participants ORDER BY timestamp DESC");
-        res.json({
-            "message": "success",
-            "data": result.rows
-        });
+        await dbQuery(sql, [score, participant_id]);
+        res.json({ "message": "success" });
     } catch (err) {
         res.status(400).json({ "error": err.message });
     }
 });
 
-// Update participant (Attention Check & Debrief)
-app.put('/api/participants/:id', async (req, res) => {
-    const { attention_check, qualitative_feedback, compensation_id } = req.body;
-    console.log(`Received update for ${req.params.id}:`, req.body);
-
-    let sql = `UPDATE participants SET `;
-    const params = [];
-    const updates = [];
-    let paramIndex = 1;
-
-    if (attention_check !== undefined) {
-        updates.push(`attention_check = $${paramIndex++}`);
-        params.push(attention_check);
-    }
-    if (qualitative_feedback !== undefined) {
-        updates.push(`qualitative_feedback = $${paramIndex++}`);
-        params.push(qualitative_feedback);
-    }
-    if (compensation_id !== undefined) {
-        updates.push(`compensation_id = $${paramIndex++}`);
-        params.push(compensation_id);
-    }
-
-    if (updates.length === 0) {
-        return res.status(400).json({ "error": "No fields to update" });
-    }
-
-    sql += updates.join(', ') + ` WHERE id = $${paramIndex}`;
-    params.push(req.params.id);
-
-    try {
-        const result = await dbQuery(sql, params);
-        res.json({ "message": "success", "changes": result.rowCount });
-    } catch (err) {
-        console.error("Database error updating participant:", err.message);
-        res.status(400).json({ "error": err.message });
-    }
-});
-
-// Submit a rating
+// Rating submission
 app.post('/api/ratings', async (req, res) => {
     const { video_id, participant_id, accuracy, bias, representativeness, stereotypes, comments } = req.body;
-
     const sql = `INSERT INTO ratings (video_id, participant_id, accuracy, bias, representativeness, stereotypes, comments) 
-               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`;
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)`;
     const params = [video_id, participant_id, accuracy, bias, representativeness, stereotypes, comments];
 
     try {
-        const result = await dbQuery(sql, params);
-        res.json({
-            "message": "success",
-            "data": result.rows[0].id
-        });
+        await dbQuery(sql, params);
+        res.json({ "message": "success" });
     } catch (err) {
-        console.error('Error saving rating:', err);
         res.status(400).json({ "error": err.message });
     }
 });
 
-// Get all ratings (Admin) - PROTECTED
-app.get('/api/ratings', authenticateToken, async (req, res) => {
-    const sql = `
-        SELECT r.*, v.title as video_title, v.filename
-        FROM ratings r 
-        JOIN videos v ON r.video_id = v.id 
-        ORDER BY r.timestamp DESC
-    `;
+// Debrief submission
+app.post('/api/debrief', async (req, res) => {
+    const { participant_id, feedback, compensation_id } = req.body;
+    const sql = `UPDATE participants SET qualitative_feedback = $1, compensation_id = $2 WHERE id = $3`;
     try {
-        const result = await dbQuery(sql);
-        res.json({
-            "message": "success",
-            "data": result.rows
-        });
+        await dbQuery(sql, [feedback, compensation_id, participant_id]);
+        res.json({ "message": "success" });
     } catch (err) {
         res.status(400).json({ "error": err.message });
     }
 });
 
-// Handle client-side routing (SPA fallback)
-app.get(/(.*)/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// Initialize database and start server
+// Initialize DB and Start Server
 initDatabase().then(() => {
     app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
     });
 }).catch(err => {
-    console.error('Failed to connect to the database:', err);
+    console.error('Failed to initialize database:', err);
     process.exit(1);
 });
