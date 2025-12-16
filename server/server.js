@@ -179,7 +179,7 @@ app.get('/api/ratings', authenticateToken, async (req, res) => {
 });
 
 // Handle client-side routing (SPA fallback)
-app.get('*', (req, res) => {
+app.get(/(.*)/, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
