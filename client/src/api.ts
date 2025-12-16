@@ -3,10 +3,22 @@ import type { Video, Rating } from './types';
 
 // Helper to handle API errors
 const handleResponse = async (response: Response) => {
+    const contentType = response.headers.get("content-type");
+    const isJson = contentType && contentType.includes("application/json");
+
     if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-        throw new Error(error.error || `Request failed with status ${response.status}`);
+        if (isJson) {
+            const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+            throw new Error(error.error || `Request failed with status ${response.status} `);
+        } else {
+            throw new Error(`Request failed with status ${response.status} `);
+        }
     }
+
+    if (!isJson) {
+        throw new Error("Invalid response format: Expected JSON");
+    }
+
     return response.json();
 };
 

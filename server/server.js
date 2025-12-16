@@ -269,6 +269,11 @@ app.post('/api/debrief', async (req, res) => {
     }
 });
 
+// Handle SPA routing - serve index.html for all non-API routes
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
 // Initialize DB and Start Server
 initDatabase().then(() => {
     app.listen(PORT, () => {
