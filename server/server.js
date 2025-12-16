@@ -34,6 +34,17 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// Health Check Route
+app.get('/api/health', async (req, res) => {
+    try {
+        await dbQuery('SELECT NOW()');
+        res.json({ status: 'ok', timestamp: new Date() });
+    } catch (err) {
+        console.error('Health check failed:', err);
+        res.status(500).json({ status: 'error', message: err.message });
+    }
+});
+
 // API Routes
 
 // Login Route
@@ -143,6 +154,7 @@ app.post('/api/ratings', async (req, res) => {
             "data": result.rows[0].id
         });
     } catch (err) {
+        console.error('Error saving rating:', err);
         res.status(400).json({ "error": err.message });
     }
 });

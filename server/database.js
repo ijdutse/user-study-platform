@@ -5,11 +5,19 @@ require('dotenv').config();
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    max: 20, // Maximum number of clients in the pool
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
 });
 
 pool.on('connect', () => {
     console.log('Connected to the PostgreSQL database.');
+});
+
+pool.on('error', (err, client) => {
+    console.error('Unexpected error on idle client', err);
+    process.exit(-1);
 });
 
 async function initDatabase() {
@@ -100,6 +108,7 @@ async function initDatabase() {
 
     } catch (err) {
         console.error('Error initializing database:', err);
+        throw err; // Rethrow to ensure server fails to start if DB is broken
     }
 }
 
