@@ -1,4 +1,4 @@
-import { API_BASE_URL } from './config';
+import { API_URL } from './config';
 import type { Video, Rating } from './types';
 
 // Helper to handle API errors
@@ -9,9 +9,9 @@ const handleResponse = async (response: Response) => {
     if (!response.ok) {
         if (isJson) {
             const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-            throw new Error(error.error || `Request failed with status ${response.status} `);
+            throw new Error(error.error || `Request failed with status ${response.status}`);
         } else {
-            throw new Error(`Request failed with status ${response.status} `);
+            throw new Error(`Request failed with status ${response.status}`);
         }
     }
 
@@ -25,13 +25,13 @@ const handleResponse = async (response: Response) => {
 // --- Public API ---
 
 export const fetchVideos = async (): Promise<Video[]> => {
-    const response = await fetch(`${API_BASE_URL}/videos`);
+    const response = await fetch(`${API_URL}/videos`);
     const json = await handleResponse(response);
     return json.data;
 };
 
 export const submitDemographics = async (data: any) => {
-    const response = await fetch(`${API_BASE_URL}/participants`, {
+    const response = await fetch(`${API_URL}/participants`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -40,7 +40,7 @@ export const submitDemographics = async (data: any) => {
 };
 
 export const submitAttentionCheck = async (participantId: string, score: number) => {
-    const response = await fetch(`${API_BASE_URL}/attention-check`, {
+    const response = await fetch(`${API_URL}/attention-check`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participant_id: participantId, score }),
@@ -49,7 +49,7 @@ export const submitAttentionCheck = async (participantId: string, score: number)
 };
 
 export const submitRating = async (rating: Rating) => {
-    const response = await fetch(`${API_BASE_URL}/ratings`, {
+    const response = await fetch(`${API_URL}/ratings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(rating),
@@ -58,7 +58,7 @@ export const submitRating = async (rating: Rating) => {
 };
 
 export const submitDebrief = async (participantId: string, feedback: string, compensationId: string) => {
-    const response = await fetch(`${API_BASE_URL}/debrief`, {
+    const response = await fetch(`${API_URL}/debrief`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ participant_id: participantId, feedback, compensation_id: compensationId }),
@@ -69,7 +69,7 @@ export const submitDebrief = async (participantId: string, feedback: string, com
 // --- Admin API ---
 
 export const loginAdmin = async (password: string) => {
-    const response = await fetch(`${API_BASE_URL}/login`, {
+    const response = await fetch(`${API_URL}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -83,7 +83,7 @@ export const uploadVideo = async (file: File, title: string, context: string, to
     formData.append('title', title);
     formData.append('context', context);
 
-    const response = await fetch(`${API_BASE_URL}/videos`, {
+    const response = await fetch(`${API_URL}/videos`, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${token}`
@@ -94,7 +94,7 @@ export const uploadVideo = async (file: File, title: string, context: string, to
 };
 
 export const updateVideo = async (id: number, title: string, context: string, token: string) => {
-    const response = await fetch(`${API_BASE_URL}/videos/${id}`, {
+    const response = await fetch(`${API_URL}/videos/${id}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
@@ -106,7 +106,7 @@ export const updateVideo = async (id: number, title: string, context: string, to
 };
 
 export const fetchAdminStats = async (token: string) => {
-    const response = await fetch(`${API_BASE_URL}/admin/stats`, {
+    const response = await fetch(`${API_URL}/admin/stats`, {
         headers: {
             'Authorization': `Bearer ${token}`
         }
