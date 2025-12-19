@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AttentionCheck from './AttentionCheck';
+import VideoPlayer from './VideoPlayer';
 import { API_BASE_URL } from '../config';
 
 interface TutorialPageProps {
@@ -24,16 +25,11 @@ const TutorialPage: React.FC<TutorialPageProps> = ({ onComplete }) => {
                             You will be asked a question about it afterwards.
                         </p>
 
-                        <div className="aspect-w-16 aspect-h-9 bg-black rounded-lg overflow-hidden mb-8">
-                            {/* Placeholder for tutorial video - using a sample video for now */}
-                            <video
-                                controls
-                                className="w-full h-full object-contain"
+                        <div className="aspect-video bg-black rounded-lg overflow-hidden mb-8">
+                            <VideoPlayer
+                                src="https://youtu.be/Ats6SxWfTUQ"
                                 onEnded={handleVideoComplete}
-                            >
-                                <source src={`${API_BASE_URL}/sample1.mp4`} type="video/mp4" />
-                                Your browser does not support the video tag.
-                            </video>
+                            />
                         </div>
 
                         <div className="flex justify-end">

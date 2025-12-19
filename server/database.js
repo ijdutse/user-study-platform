@@ -46,6 +46,7 @@ if (isProduction && process.env.DATABASE_URL) {
             `);
 
             // Migration: Add url column if it doesn't exist
+            console.log('Checking for url column...');
             await pool.query(`
                 DO $$ 
                 BEGIN 
@@ -56,6 +57,7 @@ if (isProduction && process.env.DATABASE_URL) {
             `);
 
             // Migration: Ensure title is unique
+            console.log('Ensuring title is unique...');
             await pool.query(`
                 DO $$ 
                 BEGIN 
@@ -66,9 +68,11 @@ if (isProduction && process.env.DATABASE_URL) {
             `);
 
             // Migration: Remove NOT NULL from filename
+            console.log('Removing NOT NULL from filename...');
             await pool.query(`
                 ALTER TABLE videos ALTER COLUMN filename DROP NOT NULL;
             `);
+            console.log('Migrations completed.');
 
             // Participants table
             await pool.query(`
@@ -260,7 +264,8 @@ async function syncMetadata(queryFn) {
                 VALUES ($1, $2, $3)
                 ON CONFLICT(title) DO UPDATE SET
                 url = EXCLUDED.url,
-                context = EXCLUDED.context
+                context = EXCLUDED.context,
+                filename = NULL
             `, [meta.url, meta.title, meta.context]);
         }
     }

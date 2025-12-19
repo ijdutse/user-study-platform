@@ -3,12 +3,13 @@ import ReactPlayer from 'react-player';
 
 interface VideoPlayerProps {
     src: string;
-    onError: () => void;
+    onError?: () => void;
+    onEnded?: () => void;
 }
 
 const Player = ReactPlayer as any;
 
-const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, onError }) => {
+const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, onError = () => { }, onEnded }) => {
     const [isBuffering, setIsBuffering] = React.useState(true);
 
     return (
@@ -28,6 +29,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, onError }) => {
                     onBufferEnd={() => setIsBuffering(false)}
                     onReady={() => setIsBuffering(false)}
                     onStart={() => setIsBuffering(false)}
+                    onEnded={onEnded}
                     onError={(e: any) => {
                         console.error('VideoPlayer Error:', e);
                         setIsBuffering(false);
