@@ -65,6 +65,11 @@ if (isProduction && process.env.DATABASE_URL) {
                 END $$;
             `);
 
+            // Migration: Remove NOT NULL from filename
+            await pool.query(`
+                ALTER TABLE videos ALTER COLUMN filename DROP NOT NULL;
+            `);
+
             // Participants table
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS participants (
