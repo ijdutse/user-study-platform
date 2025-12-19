@@ -1,21 +1,21 @@
 [
     {
-        "filename": "sample1.mp4",
+        "url": "https://youtu.be/Ats6SxWfTUQ",
         "title": "Introduction to AI",
         "context": "This video provides a brief overview of Artificial Intelligence and its potential impact on society."
     },
     {
-        "filename": "sample 2.mp4",
+        "url": "https://youtu.be/73KMZsFZEAw",
         "title": "Climate Change Effects",
         "context": "A documentary style clip showing the visible effects of climate change on coastal regions."
     },
     {
-        "filename": "sample 3.mp4",
+        "url": "https://youtu.be/73KMZsFZEAw",
         "title": "Urban Planning",
         "context": "An analysis of modern urban planning strategies to reduce traffic congestion."
     },
     {
-        "filename": "sample 4.mp4",
+        "url": "https://youtu.be/sOuhZ9oFSb8",
         "title": "Digital Privacy",
         "context": "This segment discusses the importance of digital privacy in the age of social media."
     }

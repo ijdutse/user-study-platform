@@ -4,6 +4,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 require('dotenv').config();
+const { Parser } = require('json2csv');
 const { query: dbQuery, initDatabase } = require('./database');
 
 const app = express();
@@ -117,15 +118,15 @@ app.get('/api/videos', async (req, res) => {
 
 // Upload new video (Admin) - PROTECTED
 app.post('/api/videos', authenticateToken, upload.single('video'), async (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'No video file uploaded' });
+    const { title, context, url } = req.body;
+    let filename = req.file ? req.file.filename : null;
+
+    if (!filename && !url) {
+        return res.status(400).json({ error: 'Either a video file or a URL must be provided' });
     }
 
-    const { title, context } = req.body;
-    const filename = req.file.filename;
-
-    const sql = `INSERT INTO videos (filename, title, context) VALUES ($1, $2, $3) RETURNING id`;
-    const params = [filename, title, context];
+    const sql = `INSERT INTO videos (filename, title, context, url) VALUES ($1, $2, $3, $4) RETURNING id`;
+    const params = [filename, title, context, url];
 
     try {
         const result = await dbQuery(sql, params);
@@ -135,7 +136,8 @@ app.post('/api/videos', authenticateToken, upload.single('video'), async (req, r
                 id: result.rows[0].id,
                 filename,
                 title,
-                context
+                context,
+                url
             }
         });
     } catch (err) {
@@ -146,10 +148,10 @@ app.post('/api/videos', authenticateToken, upload.single('video'), async (req, r
 // Update video metadata (Admin) - PROTECTED
 app.put('/api/videos/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { title, context } = req.body;
+    const { title, context, url } = req.body;
 
-    const sql = `UPDATE videos SET title = $1, context = $2 WHERE id = $3 RETURNING *`;
-    const params = [title, context, id];
+    const sql = `UPDATE videos SET title = $1, context = $2, url = $3 WHERE id = $4 RETURNING *`;
+    const params = [title, context, url, id];
 
     try {
         const result = await dbQuery(sql, params);
@@ -210,6 +212,81 @@ app.get('/api/admin/stats', authenticateToken, async (req, res) => {
         });
     } catch (err) {
         console.error("Error fetching stats:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export Ratings - PROTECTED
+app.get('/api/admin/export/ratings', authenticateToken, async (req, res) => {
+    try {
+        const sql = `
+            SELECT 
+                r.id, v.title as video_title, r.participant_id, 
+                r.accuracy, r.bias, r.representativeness, r.stereotypes, 
+                r.comments, r.timestamp 
+            FROM ratings r
+            JOIN videos v ON r.video_id = v.id
+            ORDER BY r.timestamp DESC
+        `;
+        const result = await dbQuery(sql);
+
+        const fields = ['id', 'video_title', 'participant_id', 'accuracy', 'bias', 'representativeness', 'stereotypes', 'comments', 'timestamp'];
+        const json2csvParser = new Parser({ fields });
+        const csv = json2csvParser.parse(result.rows);
+
+        res.header('Content-Type', 'text/csv');
+        res.attachment('ratings_export.csv');
+        return res.send(csv);
+    } catch (err) {
+        console.error("Export error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Export Participants - PROTECTED
+app.get('/api/admin/export/participants', authenticateToken, async (req, res) => {
+    try {
+        const sql = `SELECT * FROM participants ORDER BY timestamp DESC`;
+        const result = await dbQuery(sql);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: "No participants found" });
+        }
+
+        const fields = Object.keys(result.rows[0]);
+        const json2csvParser = new Parser({ fields });
+        const csv = json2csvParser.parse(result.rows);
+
+        res.header('Content-Type', 'text/csv');
+        res.attachment('participants_export.csv');
+        return res.send(csv);
+    } catch (err) {
+        console.error("Export error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get Raw Participants - PROTECTED
+app.get('/api/admin/raw/participants', authenticateToken, async (req, res) => {
+    try {
+        const result = await dbQuery(`SELECT * FROM participants ORDER BY timestamp DESC`);
+        res.json({ message: "success", data: result.rows });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get Raw Ratings - PROTECTED
+app.get('/api/admin/raw/ratings', authenticateToken, async (req, res) => {
+    try {
+        const result = await dbQuery(`
+            SELECT r.*, v.title as video_title 
+            FROM ratings r 
+            JOIN videos v ON r.video_id = v.id 
+            ORDER BY r.timestamp DESC
+        `);
+        res.json({ message: "success", data: result.rows });
+    } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });

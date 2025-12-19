@@ -1,32 +1,40 @@
 import React from 'react';
+import ReactPlayer from 'react-player';
 
 interface VideoPlayerProps {
     src: string;
     onError: () => void;
 }
 
+const Player = ReactPlayer as any;
+
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, onError }) => {
     const [isBuffering, setIsBuffering] = React.useState(true);
 
     return (
-        <div className="w-full bg-black rounded-lg overflow-hidden shadow-xl aspect-w-16 aspect-h-9 relative">
+        <div className="w-full bg-black rounded-lg overflow-hidden shadow-xl aspect-video relative">
             {isBuffering && (
                 <div className="absolute inset-0 flex items-center justify-center z-10 bg-black bg-opacity-50">
                     <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
                 </div>
             )}
-            <video
-                className="w-full h-full object-contain"
-                controls
-                src={src}
-                onError={onError}
-                onWaiting={() => setIsBuffering(true)}
-                onPlaying={() => setIsBuffering(false)}
-                onCanPlay={() => setIsBuffering(false)}
-                onLoadStart={() => setIsBuffering(true)}
-            >
-                Your browser does not support the video tag.
-            </video>
+            <div className="w-full h-full">
+                <Player
+                    url={src}
+                    controls
+                    width="100%"
+                    height="100%"
+                    onBuffer={() => setIsBuffering(true)}
+                    onBufferEnd={() => setIsBuffering(false)}
+                    onReady={() => setIsBuffering(false)}
+                    onStart={() => setIsBuffering(false)}
+                    onError={(e: any) => {
+                        console.error('VideoPlayer Error:', e);
+                        setIsBuffering(false);
+                        onError();
+                    }}
+                />
+            </div>
         </div>
     );
 };

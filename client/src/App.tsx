@@ -275,7 +275,7 @@ function AssessmentApp() {
                     <div className="aspect-w-16 aspect-h-9 bg-black">
                       {videos.length > 0 && (
                         <VideoPlayer
-                          src={`${API_BASE_URL}/${videos[currentIndex].filename}`}
+                          src={videos[currentIndex].url || `${API_BASE_URL}/videos/${videos[currentIndex].filename}`}
                           onError={() => console.log('Video load error')}
                         />
                       )}

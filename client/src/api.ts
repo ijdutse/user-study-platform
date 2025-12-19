@@ -77,11 +77,12 @@ export const loginAdmin = async (password: string) => {
     return handleResponse(response);
 };
 
-export const uploadVideo = async (file: File, title: string, context: string, token: string) => {
+export const uploadVideo = async (file: File | null, title: string, context: string, token: string, url?: string) => {
     const formData = new FormData();
-    formData.append('video', file);
+    if (file) formData.append('video', file);
     formData.append('title', title);
     formData.append('context', context);
+    if (url) formData.append('url', url);
 
     const response = await fetch(`${API_URL}/videos`, {
         method: 'POST',
@@ -93,14 +94,14 @@ export const uploadVideo = async (file: File, title: string, context: string, to
     return handleResponse(response);
 };
 
-export const updateVideo = async (id: number, title: string, context: string, token: string) => {
+export const updateVideo = async (id: number, title: string, context: string, token: string, url?: string) => {
     const response = await fetch(`${API_URL}/videos/${id}`, {
         method: 'PUT',
         headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ title, context }),
+        body: JSON.stringify({ title, context, url }),
     });
     return handleResponse(response);
 };
@@ -112,4 +113,60 @@ export const fetchAdminStats = async (token: string) => {
         }
     });
     return handleResponse(response);
+};
+
+export const exportRatings = async (token: string) => {
+    const response = await fetch(`${API_URL}/admin/export/ratings`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) throw new Error('Failed to export ratings');
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ratings_export.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+
+export const exportParticipants = async (token: string) => {
+    const response = await fetch(`${API_URL}/admin/export/participants`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    if (!response.ok) throw new Error('Failed to export participants');
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'participants_export.csv';
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+};
+
+export const fetchRawParticipants = async (token: string) => {
+    const response = await fetch(`${API_URL}/admin/raw/participants`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    const json = await handleResponse(response);
+    return json.data;
+};
+
+export const fetchRawRatings = async (token: string) => {
+    const response = await fetch(`${API_URL}/admin/raw/ratings`, {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+    const json = await handleResponse(response);
+    return json.data;
 };

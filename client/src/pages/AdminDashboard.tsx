@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { loginAdmin, fetchVideos, uploadVideo, updateVideo, fetchAdminStats } from '../api';
+import { loginAdmin, fetchVideos, uploadVideo, updateVideo, fetchAdminStats, exportRatings, exportParticipants, fetchRawParticipants, fetchRawRatings } from '../api';
 import type { Video } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -19,15 +19,18 @@ export default function AdminDashboard() {
     const [token, setToken] = useState(localStorage.getItem('admin_token'));
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState<'videos' | 'analytics'>('videos');
+    const [activeTab, setActiveTab] = useState<'videos' | 'analytics' | 'data'>('videos');
 
     // Data State
     const [videos, setVideos] = useState<Video[]>([]);
     const [stats, setStats] = useState<AdminStats | null>(null);
+    const [participants, setParticipants] = useState<any[]>([]);
+    const [ratings, setRatings] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
 
     // Upload State
     const [uploadFile, setUploadFile] = useState<File | null>(null);
+    const [uploadUrl, setUploadUrl] = useState('');
     const [uploadTitle, setUploadTitle] = useState('');
     const [uploadContext, setUploadContext] = useState('');
     const [isUploading, setIsUploading] = useState(false);
@@ -39,7 +42,7 @@ export default function AdminDashboard() {
         if (token) {
             loadData();
         }
-    }, [token]);
+    }, [token, activeTab]);
 
     const loadData = async () => {
         setLoading(true);
@@ -50,6 +53,15 @@ export default function AdminDashboard() {
             ]);
             setVideos(videosData);
             setStats(statsData);
+
+            if (activeTab === 'data') {
+                const [participantsData, ratingsData] = await Promise.all([
+                    fetchRawParticipants(token!),
+                    fetchRawRatings(token!)
+                ]);
+                setParticipants(participantsData);
+                setRatings(ratingsData);
+            }
         } catch (err) {
             console.error("Failed to load data", err);
             if (err instanceof Error && err.message.includes('403')) {
@@ -79,18 +91,20 @@ export default function AdminDashboard() {
 
     const handleUpload = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!uploadFile || !token) return;
+        if (!token) return;
 
         setIsUploading(true);
         try {
-            await uploadVideo(uploadFile, uploadTitle, uploadContext, token);
+            await uploadVideo(uploadFile, uploadTitle, uploadContext, token, uploadUrl);
             setUploadFile(null);
+            setUploadUrl('');
             setUploadTitle('');
             setUploadContext('');
-            alert('Video uploaded successfully!');
+            alert('Video added successfully!');
             loadData();
         } catch (err) {
-            alert('Failed to upload video');
+            console.error('Upload error:', err);
+            alert(`Failed to add video: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setIsUploading(false);
         }
@@ -101,11 +115,29 @@ export default function AdminDashboard() {
         if (!editingVideo || !token) return;
 
         try {
-            await updateVideo(editingVideo.id, editingVideo.title, editingVideo.context, token);
+            await updateVideo(editingVideo.id, editingVideo.title, editingVideo.context, token, editingVideo.url);
             setEditingVideo(null);
             loadData();
+            alert('Video updated successfully!');
         } catch (err) {
-            alert('Failed to update video');
+            console.error('Update error:', err);
+            alert(`Failed to update video: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+    };
+
+    const handleExportRatings = async () => {
+        try {
+            await exportRatings(token!);
+        } catch (err) {
+            alert('Failed to export ratings');
+        }
+    };
+
+    const handleExportParticipants = async () => {
+        try {
+            await exportParticipants(token!);
+        } catch (err) {
+            alert('Failed to export participants');
         }
     };
 
@@ -163,9 +195,30 @@ export default function AdminDashboard() {
                                 >
                                     Analytics
                                 </button>
+                                <button
+                                    onClick={() => setActiveTab('data')}
+                                    className={`px-3 py-2 rounded-md text-sm font-medium ${activeTab === 'data'
+                                        ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-200'
+                                        : 'text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
+                                        }`}
+                                >
+                                    Raw Data
+                                </button>
                             </div>
                         </div>
-                        <div className="flex items-center">
+                        <div className="flex items-center space-x-4">
+                            <button
+                                onClick={handleExportRatings}
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                            >
+                                Export Ratings
+                            </button>
+                            <button
+                                onClick={handleExportParticipants}
+                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-md text-sm font-medium transition-colors"
+                            >
+                                Export Participants
+                            </button>
                             <button
                                 onClick={logout}
                                 className="text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white px-3 py-2 rounded-md text-sm font-medium"
@@ -200,13 +253,22 @@ export default function AdminDashboard() {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Video File</label>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Video File (Optional if URL provided)</label>
                                         <input
                                             type="file"
                                             accept="video/mp4,video/webm"
-                                            required
                                             onChange={(e) => setUploadFile(e.target.files ? e.target.files[0] : null)}
                                             className="mt-1 block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">YouTube URL (Optional if File provided)</label>
+                                        <input
+                                            type="text"
+                                            value={uploadUrl}
+                                            onChange={(e) => setUploadUrl(e.target.value)}
+                                            placeholder="https://www.youtube.com/watch?v=..."
+                                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
                                         />
                                     </div>
                                 </div>
@@ -223,10 +285,10 @@ export default function AdminDashboard() {
                                 <div className="flex justify-end">
                                     <button
                                         type="submit"
-                                        disabled={isUploading}
+                                        disabled={isUploading || (!uploadFile && !uploadUrl)}
                                         className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
                                     >
-                                        {isUploading ? 'Uploading...' : 'Upload Video'}
+                                        {isUploading ? 'Adding...' : 'Add Video'}
                                     </button>
                                 </div>
                             </form>
@@ -243,7 +305,9 @@ export default function AdminDashboard() {
                                         <div className="flex items-center justify-between">
                                             <div className="flex-1 min-w-0">
                                                 <h4 className="text-sm font-medium text-indigo-600 dark:text-indigo-400 truncate">{video.title}</h4>
-                                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{video.filename}</p>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                                                    {video.url ? `URL: ${video.url}` : `File: ${video.filename}`}
+                                                </p>
                                                 <p className="mt-1 text-sm text-gray-600 dark:text-gray-300 line-clamp-2">{video.context}</p>
                                             </div>
                                             <div className="ml-4 flex-shrink-0">
@@ -260,9 +324,8 @@ export default function AdminDashboard() {
                             </ul>
                         </div>
                     </div>
-                ) : (
+                ) : activeTab === 'analytics' ? (
                     <div className="space-y-6">
-                        {/* Analytics Section */}
                         {stats && (
                             <>
                                 <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
@@ -302,10 +365,71 @@ export default function AdminDashboard() {
                             </>
                         )}
                     </div>
+                ) : (
+                    <div className="space-y-8">
+                        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                            <div className="px-4 py-5 sm:px-6">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">Participants Raw Data</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead className="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">ID</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Age</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Gender</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Consent</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        {participants.map((p) => (
+                                            <tr key={p.id}>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{p.id}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.age}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.gender}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.consent ? 'Yes' : 'No'}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{p.contact_email}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                            <div className="px-4 py-5 sm:px-6">
+                                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">Ratings Raw Data</h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                    <thead className="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Video</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Participant</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Accuracy</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Bias</th>
+                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Comments</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                        {ratings.map((r) => (
+                                            <tr key={r.id}>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">{r.video_title}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{r.participant_id}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{r.accuracy}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{r.bias}</td>
+                                                <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">{r.comments}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </main>
 
-            {/* Edit Modal */}
             {editingVideo && (
                 <div className="fixed z-10 inset-0 overflow-y-auto">
                     <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -325,6 +449,15 @@ export default function AdminDashboard() {
                                                 required
                                                 value={editingVideo.title}
                                                 onChange={(e) => setEditingVideo({ ...editingVideo, title: e.target.value })}
+                                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">YouTube URL</label>
+                                            <input
+                                                type="text"
+                                                value={editingVideo.url || ''}
+                                                onChange={(e) => setEditingVideo({ ...editingVideo, url: e.target.value })}
                                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white sm:text-sm p-2 border"
                                             />
                                         </div>

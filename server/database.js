@@ -38,10 +38,31 @@ if (isProduction && process.env.DATABASE_URL) {
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS videos (
                     id SERIAL PRIMARY KEY,
-                    filename TEXT NOT NULL UNIQUE,
-                    title TEXT,
+                    filename TEXT UNIQUE,
+                    url TEXT,
+                    title TEXT UNIQUE,
                     context TEXT
                 )
+            `);
+
+            // Migration: Add url column if it doesn't exist
+            await pool.query(`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='videos' AND column_name='url') THEN
+                        ALTER TABLE videos ADD COLUMN url TEXT;
+                    END IF;
+                END $$;
+            `);
+
+            // Migration: Ensure title is unique
+            await pool.query(`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE table_name='videos' AND constraint_name='videos_title_key') THEN
+                        ALTER TABLE videos ADD CONSTRAINT videos_title_key UNIQUE (title);
+                    END IF;
+                END $$;
             `);
 
             // Participants table
@@ -134,8 +155,9 @@ if (isProduction && process.env.DATABASE_URL) {
                     sqliteDb.run(`
                         CREATE TABLE IF NOT EXISTS videos (
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            filename TEXT NOT NULL UNIQUE,
-                            title TEXT,
+                            filename TEXT UNIQUE,
+                            url TEXT,
+                            title TEXT UNIQUE,
                             context TEXT
                         )
                     `);
@@ -213,17 +235,28 @@ async function syncMetadata(queryFn) {
             const meta = metadata.find(m => m.filename === file);
             const title = meta ? meta.title : file.replace('.mp4', '').replace(/_/g, ' ');
             const context = meta ? meta.context : "Generated video content.";
+            const url = meta && meta.url ? meta.url : null;
 
-            // Use UPSERT syntax compatible with Postgres. 
-            // SQLite 3.24+ supports ON CONFLICT too, which we used before.
-            // Both implementations support the same SQL for this.
             await queryFn(`
-                INSERT INTO videos (filename, title, context) 
-                VALUES ($1, $2, $3)
+                INSERT INTO videos (filename, title, context, url) 
+                VALUES ($1, $2, $3, $4)
                 ON CONFLICT(filename) DO UPDATE SET
                 title = EXCLUDED.title,
+                context = EXCLUDED.context,
+                url = EXCLUDED.url
+            `, [file, title, context, url]);
+        }
+    }
+
+    for (const meta of metadata) {
+        if (meta.url && meta.url.trim() !== "" && !meta.filename) {
+            await queryFn(`
+                INSERT INTO videos (url, title, context) 
+                VALUES ($1, $2, $3)
+                ON CONFLICT(title) DO UPDATE SET
+                url = EXCLUDED.url,
                 context = EXCLUDED.context
-            `, [file, title, context]);
+            `, [meta.url, meta.title, meta.context]);
         }
     }
 }
