@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import AttentionCheck from './AttentionCheck';
 import VideoPlayer from './VideoPlayer';
-import { API_BASE_URL } from '../config';
 
 interface TutorialPageProps {
     onComplete: (score: number) => void;
