@@ -24,12 +24,11 @@ const TutorialPage: React.FC<TutorialPageProps> = ({ onComplete }) => {
                             You will be asked a question about it afterwards.
                         </p>
 
-                        <div className="aspect-video bg-black rounded-lg overflow-hidden mb-8">
-                            <VideoPlayer
-                                src="https://youtu.be/Ats6SxWfTUQ"
-                                onEnded={handleVideoComplete}
-                            />
-                        </div>
+                        <VideoPlayer
+                            src="https://youtu.be/Ats6SxWfTUQ"
+                            onEnded={handleVideoComplete}
+                        />
+                        <div className="mb-8"></div>
 
                         <div className="flex justify-end">
                             <button

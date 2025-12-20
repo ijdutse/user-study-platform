@@ -10,33 +10,45 @@ interface VideoPlayerProps {
 const Player = ReactPlayer as any;
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({ src, onError = () => { }, onEnded }) => {
-    const [isBuffering, setIsBuffering] = React.useState(true);
+    const [delayedSrc, setDelayedSrc] = React.useState<string | null>(null);
+
+    React.useEffect(() => {
+        console.log('VideoPlayer: loading', src);
+        const timer = setTimeout(() => {
+            setDelayedSrc(src);
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [src]);
 
     return (
-        <div className="w-full bg-black rounded-lg overflow-hidden shadow-xl aspect-video relative">
-            {isBuffering && (
-                <div className="absolute inset-0 flex items-center justify-center z-10 bg-black bg-opacity-50">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
-                </div>
-            )}
-            <div className="w-full h-full">
+        <div className="w-full aspect-video bg-black relative overflow-hidden rounded-lg shadow-lg">
+            {delayedSrc ? (
                 <Player
-                    url={src}
+                    url={delayedSrc}
                     controls
                     width="100%"
                     height="100%"
-                    onBuffer={() => setIsBuffering(true)}
-                    onBufferEnd={() => setIsBuffering(false)}
-                    onReady={() => setIsBuffering(false)}
-                    onStart={() => setIsBuffering(false)}
+                    onStart={() => console.log('VideoPlayer: Started')}
                     onEnded={onEnded}
                     onError={(e: any) => {
                         console.error('VideoPlayer Error:', e);
-                        setIsBuffering(false);
                         onError();
                     }}
+                    config={{
+                        youtube: {
+                            playerVars: {
+                                autoplay: 0,
+                                modestbranding: 1,
+                                rel: 0
+                            }
+                        }
+                    }}
                 />
-            </div>
+            ) : (
+                <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-indigo-500 border-t-transparent"></div>
+                </div>
+            )}
         </div>
     );
 };

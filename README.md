@@ -24,17 +24,17 @@ For the client, you can optionally set:
 
 1.  **Install Dependencies**
     ```bash
-    cd server && npm install
-    cd ../client && npm install
+    npm run install:all
     ```
 
 2.  **Set Up Environment Variables**
     - Create `server/.env` file with required variables
-    - Ensure PostgreSQL is running and DATABASE_URL is configured
+    - For local development, it defaults to SQLite if `DATABASE_URL` is not set.
 
 3.  **Run the Application**
-    - **Server**: `cd server && npm start` (Runs on port 3001)
-    - **Client**: `cd client && npm run dev` (Runs on port 5173)
+    - **Development Mode**: `npm run dev` (Runs both server and client concurrently)
+    - **Server only**: `cd server && npm start`
+    - **Client only**: `cd client && npm run dev`
 
 ## Deployment to Render
 

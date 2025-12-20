@@ -26,7 +26,7 @@ const ConsentPage: React.FC<ConsentPageProps> = ({ onConsent }) => {
                         The purpose of this study is to understand how people perceive and evaluate generated videos.
                     </p>
                     <h3 className="text-lg font-semibold mb-2">Procedures</h3>
-                    <p className="mb-4">
+                    <div className="mb-4">
                         If you agree to participate, you will be asked to:
                         <ul className="list-disc pl-5 mt-2 space-y-1">
                             <li>Complete a short demographic survey.</li>
@@ -34,7 +34,7 @@ const ConsentPage: React.FC<ConsentPageProps> = ({ onConsent }) => {
                             <li>View and rate a series of short videos.</li>
                             <li>Provide optional feedback at the end.</li>
                         </ul>
-                    </p>
+                    </div>
                     <h3 className="text-lg font-semibold mb-2">Data Usage</h3>
                     <p className="mb-4">
                         Your responses will be used for research purposes only. Data will be stored securely and
@@ -75,8 +75,8 @@ const ConsentPage: React.FC<ConsentPageProps> = ({ onConsent }) => {
                         type="submit"
                         disabled={!consented}
                         className={`w-full py-3 px-4 rounded-lg font-bold text-white transition-colors ${consented
-                                ? 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'
-                                : 'bg-gray-400 cursor-not-allowed'
+                            ? 'bg-indigo-600 hover:bg-indigo-700 shadow-lg'
+                            : 'bg-gray-400 cursor-not-allowed'
                             }`}
                     >
                         Continue to Study

@@ -4,7 +4,14 @@ require('dotenv').config();
 
 // Determine mode
 const isProduction = process.env.NODE_ENV === 'production';
-console.log(`Database Mode: ${isProduction ? 'PostgreSQL (Production)' : 'SQLite (Local)'}`);
+const dbUrl = process.env.DATABASE_URL;
+console.log('-------------------------------------------');
+console.log(`Database Mode: ${isProduction ? 'Production' : 'Development'}`);
+console.log(`Storage Type: ${isProduction && dbUrl ? 'PostgreSQL' : 'SQLite'}`);
+if (!isProduction && !dbUrl) {
+    console.log(`SQLite Path: ${path.join(__dirname, 'assessment.db')}`);
+}
+console.log('-------------------------------------------');
 
 let db;
 let query;
