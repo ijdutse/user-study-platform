@@ -100,6 +100,16 @@ if (isProduction && process.env.DATABASE_URL) {
                 )
             `);
 
+            // Migration: Add timestamp to participants if missing
+            await pool.query(`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='participants' AND column_name='timestamp') THEN
+                        ALTER TABLE participants ADD COLUMN timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                    END IF;
+                END $$;
+            `);
+
             // Ratings table
             await pool.query(`
                 CREATE TABLE IF NOT EXISTS ratings (
@@ -114,6 +124,16 @@ if (isProduction && process.env.DATABASE_URL) {
                     comments TEXT,
                     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
+            `);
+
+            // Migration: Add timestamp to ratings if missing
+            await pool.query(`
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ratings' AND column_name='timestamp') THEN
+                        ALTER TABLE ratings ADD COLUMN timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                    END IF;
+                END $$;
             `);
 
             await syncMetadata(query);
@@ -212,6 +232,23 @@ if (isProduction && process.env.DATABASE_URL) {
                             FOREIGN KEY(participant_id) REFERENCES participants(id)
                         )
                     `);
+
+                    // SQLite Migrations for timestamp
+                    sqliteDb.run(`PRAGMA table_info(participants)`, (err, rows) => {
+                        if (err) return;
+                        const hasTimestamp = rows.some(r => r.name === 'timestamp');
+                        if (!hasTimestamp) {
+                            sqliteDb.run(`ALTER TABLE participants ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`);
+                        }
+                    });
+
+                    sqliteDb.run(`PRAGMA table_info(ratings)`, (err, rows) => {
+                        if (err) return;
+                        const hasTimestamp = rows.some(r => r.name === 'timestamp');
+                        if (!hasTimestamp) {
+                            sqliteDb.run(`ALTER TABLE ratings ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`);
+                        }
+                    });
 
                     await syncMetadata(query);
                     console.log('Database initialized successfully (SQLite).');
