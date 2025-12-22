@@ -234,21 +234,25 @@ if (isProduction && process.env.DATABASE_URL) {
                     `);
 
                     // SQLite Migrations for timestamp
-                    sqliteDb.run(`PRAGMA table_info(participants)`, (err, rows) => {
-                        if (err) return;
-                        const hasTimestamp = rows.some(r => r.name === 'timestamp');
-                        if (!hasTimestamp) {
-                            sqliteDb.run(`ALTER TABLE participants ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`);
-                        }
-                    });
+                    const checkAndAddTimestamp = (tableName) => {
+                        return new Promise((resolve, reject) => {
+                            sqliteDb.all(`PRAGMA table_info(${tableName})`, (err, rows) => {
+                                if (err) return reject(err);
+                                const hasTimestamp = rows.some(r => r.name === 'timestamp');
+                                if (!hasTimestamp) {
+                                    sqliteDb.run(`ALTER TABLE ${tableName} ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`, (err) => {
+                                        if (err) return reject(err);
+                                        resolve();
+                                    });
+                                } else {
+                                    resolve();
+                                }
+                            });
+                        });
+                    };
 
-                    sqliteDb.run(`PRAGMA table_info(ratings)`, (err, rows) => {
-                        if (err) return;
-                        const hasTimestamp = rows.some(r => r.name === 'timestamp');
-                        if (!hasTimestamp) {
-                            sqliteDb.run(`ALTER TABLE ratings ADD COLUMN timestamp DATETIME DEFAULT CURRENT_TIMESTAMP`);
-                        }
-                    });
+                    await checkAndAddTimestamp('participants');
+                    await checkAndAddTimestamp('ratings');
 
                     await syncMetadata(query);
                     console.log('Database initialized successfully (SQLite).');
